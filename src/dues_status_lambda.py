@@ -1,8 +1,8 @@
 import json
-import boto3
 import os
+
+import boto3
 from boto3.dynamodb.conditions import Key
-from datetime import datetime
 
 dynamodb = boto3.resource('dynamodb')
 allottees_table = dynamodb.Table(os.environ['ALLOTTEES_TABLE_NAME'])
