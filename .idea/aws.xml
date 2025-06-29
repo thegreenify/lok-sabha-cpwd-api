@@ -6,6 +6,8 @@
     <option name="recentlyUsedProfiles">
       <list>
         <option value="profile:my-sso-381883974342-AdministratorMember" />
+        <option value="profile:381883974342_AdministratorMember" />
+        <option value="profile:aws" />
         <option value="profile:default" />
       </list>
     </option>
@@ -14,9 +16,6 @@
         <option value="ap-south-1" />
       </list>
     </option>
-  </component>
-  <component name="connectionManager">
-    <option name="activeConnectionId" value="AwsConnectionManagerConnection" />
   </component>
   <component name="explorerToolWindow">
     <option name="selectedTab" value="Explorer" />
