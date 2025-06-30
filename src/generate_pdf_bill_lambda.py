@@ -1,7 +1,6 @@
-import json
 import os
+import json
 import boto3
-from datetime import datetime
 from fpdf import FPDF # fpdf2 library
 
 # Initialize DynamoDB and S3 clients
@@ -99,7 +98,7 @@ def lambda_handler(event, context):
         pdf.multi_cell(0, 5, "Note: This is an auto-generated water bill. For any discrepancies, please contact the DDO office.")
 
         # Save PDF to BytesIO object
-        pdf_output = pdf.output(dest='S').encode('latin-1') # Output as bytes, latin-1 encoding for fpdf2
+        pdf_output = bytes(pdf.output(dest='S'))  # Convert to bytes directly
 
         # 4. Store PDF in S3
         s3_key = f"bills/{allottee_id}/{billing_month}.pdf"
