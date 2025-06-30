@@ -150,26 +150,15 @@ Resources:
             in: header
 
       Auth:
-        ApiKeys:
-          - !Ref BillingSoftwareAPIKeyName
-          - !Ref CPWDAPIKeyName
-          - !Ref PFMSAPIKeyName
+        ApiKeyRequired: true
         UsagePlan:
+          CreateUsagePlan: PER_API
           Quota:
-            Limit: 1000000 # Example: 1 million requests per month
+            Limit: 1000000
             Period: MONTH
           Throttle:
-            RateLimit: 1000 # Example: 1000 requests per second
+            RateLimit: 1000
             BurstLimit: 2000
-          ApiStages:
-            - Stage: !Ref Environment
-              UsagePlan:
-                Quota:
-                  Limit: 1000000
-                  Period: MONTH
-                Throttle:
-                  RateLimit: 1000
-                  BurstLimit: 2000
 
   # ------------------------------------------------------------
   # DynamoDB Tables
@@ -199,36 +188,48 @@ Resources:
         ManagedBy: SAM
 
   WaterBillsTable:
-    Type: AWS::Serverless::SimpleTable
+    Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub 'LokSabhaWaterBilling-WaterBills-${Environment}'
-      PrimaryKey:
-        Name: allottee_id
-        Type: String
-      PartitionKeyName: allottee_id
-      SortKeyName: billing_month
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: allottee_id
+          AttributeType: S
+        - AttributeName: billing_month
+          AttributeType: S
+      KeySchema:
+        - AttributeName: allottee_id
+          KeyType: HASH
+        - AttributeName: billing_month
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
       Tags:
-        Environment: !Ref Environment
-        ManagedBy: SAM
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: SAM
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
 
   PaymentStatusesTable:
-    Type: AWS::Serverless::SimpleTable
+    Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub 'LokSabhaWaterBilling-PaymentStatuses-${Environment}'
-      PrimaryKey:
-        Name: employee_id
-        Type: String
-      PartitionKeyName: employee_id
-      SortKeyName: billing_month
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: employee_id
+          AttributeType: S
+        - AttributeName: billing_month
+          AttributeType: S
+      KeySchema:
+        - AttributeName: employee_id
+          KeyType: HASH
+        - AttributeName: billing_month
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
       Tags:
-        Environment: !Ref Environment
-        ManagedBy: SAM
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: SAM
 
   # ------------------------------------------------------------
   # Lambda Functions
@@ -252,7 +253,7 @@ Resources:
             Method: get
             RestApiId: !Ref WaterBillingApi
             Auth:
-              ApiKeys: [!Ref BillingSoftwareAPIKeyName]
+              ApiKeyRequired: true
         UpdateStatus:
           Type: Api
           Properties:
@@ -260,7 +261,7 @@ Resources:
             Method: post
             RestApiId: !Ref WaterBillingApi
             Auth:
-              ApiKeys: [!Ref CPWDAPIKeyName]
+              ApiKeyRequired: true
 
   DuesStatusFunction:
     Type: AWS::Serverless::Function
@@ -282,7 +283,7 @@ Resources:
             Method: get
             RestApiId: !Ref WaterBillingApi
             Auth:
-              ApiKeys: [!Ref CPWDAPIKeyName]
+              ApiKeyRequired: true
 
 
   SendDeductionsFunction:
@@ -326,7 +327,7 @@ Resources:
             Method: post
             RestApiId: !Ref WaterBillingApi
             Auth:
-              ApiKeys: [!Ref PFMSAPIKeyName]
+              ApiKeyRequired: true
 
 
 Outputs:

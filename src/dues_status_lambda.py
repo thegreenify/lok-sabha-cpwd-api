@@ -10,12 +10,34 @@ water_bills_table = dynamodb.Table(os.environ['WATER_BILLS_TABLE_NAME'])
 payment_statuses_table = dynamodb.Table(os.environ['PAYMENT_STATUSES_TABLE_NAME'])
 
 def lambda_handler(event, context):
-    employee_id = event['pathParameters'].get('employee_id')
-
-    if not employee_id:
+    try:
+        # Validate event structure
+        if 'pathParameters' not in event or not event['pathParameters']:
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'message': 'Invalid request structure.'})
+            }
+        
+        employee_id = event['pathParameters'].get('employee_id')
+        
+        if not employee_id or not employee_id.strip():
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'message': 'Employee ID is required and cannot be empty.'})
+            }
+        
+        # Validate employee_id format (basic validation)
+        if len(employee_id) < 3 or len(employee_id) > 50:
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'message': 'Employee ID must be between 3 and 50 characters.'})
+            }
+    
+    except Exception as e:
+        print(f"Error validating input: {e}")
         return {
             'statusCode': 400,
-            'body': json.dumps({'message': 'Employee ID is required.'})
+            'body': json.dumps({'message': 'Invalid request format.'})
         }
 
     try:

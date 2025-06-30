@@ -42,14 +42,24 @@ def lambda_handler(event, context):
         deduction_data.append(csv_header)
 
         # 1. Fetch all relevant allottees for the billing month
-        # This logic needs to be robust:
-        # - Iterate through all recorded water consumption for the month from MDMS (not directly in this code)
-        # - For each consumption record, map it to the allottee occupying the quarter during that period.
-        # - Calculate the bill amount.
-
-        # For this example, we'll iterate through allottees and generate dummy bills based on their status
-        scan_response = allottees_table.scan() # Caution: Avoid scan for very large tables in prod
-        allottees = scan_response.get('Items', [])
+        # Using pagination to handle large datasets efficiently
+        allottees = []
+        last_evaluated_key = None
+        
+        while True:
+            scan_kwargs = {
+                'FilterExpression': 'attribute_exists(employee_id)',
+                'Limit': 100  # Process in batches
+            }
+            if last_evaluated_key:
+                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            
+            scan_response = allottees_table.scan(**scan_kwargs)
+            allottees.extend(scan_response.get('Items', []))
+            
+            last_evaluated_key = scan_response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
 
         for allottee in allottees:
             quarter_id = allottee['quarter_id']
