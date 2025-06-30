@@ -16,7 +16,7 @@ water_bills_table = dynamodb.Table(os.environ['WATER_BILLS_TABLE_NAME'])
 # Initialize SES client
 ses_client = boto3.client('ses')
 
-def lambda_handler(event, context):
+def lambda_handler(event):
     print(f"Received event: {json.dumps(event)}")
 
     ddo_email_recipient = os.environ.get('DDO_EMAIL_RECIPIENT')

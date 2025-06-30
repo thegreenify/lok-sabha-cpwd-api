@@ -6,7 +6,7 @@ from datetime import datetime
 dynamodb = boto3.resource('dynamodb')
 allottees_table = dynamodb.Table(os.environ['ALLOTTEES_TABLE_NAME'])
 
-def lambda_handler(event, context):
+def lambda_handler(event):
     http_method = event['httpMethod']
     path = event['path']
 

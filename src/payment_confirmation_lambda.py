@@ -7,7 +7,7 @@ dynamodb = boto3.resource('dynamodb')
 payment_statuses_table = dynamodb.Table(os.environ['PAYMENT_STATUSES_TABLE_NAME'])
 water_bills_table = dynamodb.Table(os.environ['WATER_BILLS_TABLE_NAME'])
 
-def lambda_handler(event, context):
+def lambda_handler(event):
     try:
         body = json.loads(event['body'])
         billing_month = body.get('billing_month')
