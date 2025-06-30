@@ -1,0 +1,367 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'LokSabhaWaterBillingAPI
+
+  SAM template for the Lok Sabha Water Billing API, managing water charge deductions
+  for quarters, including allottee synchronization and NOC status checks. Updated
+  to send billing data to DDO via email for PFMS EIS upload.
+
+  '
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - prod
+    Description: Deployment environment (e.g., dev, prod)
+  BillingSoftwareAPIKeyName:
+    Type: String
+    Default: LokSabhaWaterBillingAPIKey
+    Description: Name of the API Gateway API Key for the billing software.
+  CPWDAPIKeyName:
+    Type: String
+    Default: CPWD_eSampada_APIKey
+    Description: Name of the API Gateway API Key for CPWD e-Sampada.
+  PFMSAPIKeyName:
+    Type: String
+    Default: PFMS_Confirmation_APIKey
+    Description: Name of the API Gateway API Key for PFMS payment confirmations.
+  DDOEmailRecipient:
+    Type: String
+    Description: Email address of the DDO to send monthly deduction data.
+    Default: ddo.lok.sabha@nic.in
+  SESEmailSender:
+    Type: String
+    Description: A verified email address in SES to send emails from.
+    Default: no-reply@lok-sabha-water-billing.gov.in
+Globals:
+  Function:
+    Runtime: python3.9
+    Timeout: 30
+    MemorySize: 128
+    Architectures:
+    - x86_64
+    Tracing: Active
+    Environment:
+      Variables:
+        ENVIRONMENT:
+          Ref: Environment
+        ALLOTTEES_TABLE_NAME:
+          Ref: AllotteesTable
+        WATER_BILLS_TABLE_NAME:
+          Ref: WaterBillsTable
+        PAYMENT_STATUSES_TABLE_NAME:
+          Ref: PaymentStatusesTable
+        DDO_EMAIL_RECIPIENT:
+          Ref: DDOEmailRecipient
+        SES_EMAIL_SENDER:
+          Ref: SESEmailSender
+Resources:
+  WaterBillingApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name:
+        Fn::Sub: LokSabhaWaterBillingAPI-${Environment}
+      StageName:
+        Ref: Environment
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title:
+            Fn::Sub: Lok Sabha Water Billing API (${Environment})
+          version: '1.0'
+        paths:
+          /v1/allottees:
+            get:
+              summary: Get Allottee Information from CPWD
+              parameters:
+              - name: quarter_id
+                in: query
+                schema:
+                  type: string
+              - name: employee_id
+                in: query
+                schema:
+                  type: string
+              - name: status
+                in: query
+                schema:
+                  type: string
+              - name: last_updated_since
+                in: query
+                schema:
+                  type: string
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AllotteeSyncFunction.Arn}/invocations
+              security:
+              - api_key: []
+          /v1/allottees/status-updates:
+            post:
+              summary: Receive Allottee Status Updates from CPWD (Webhook)
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AllotteeSyncFunction.Arn}/invocations
+              security:
+              - cpwd_api_key: []
+          /v1/allottees/{employee_id}/water-dues-status:
+            get:
+              summary: Get Water Dues Status for NOC (CPWD Query)
+              parameters:
+              - name: employee_id
+                in: path
+                required: true
+                schema:
+                  type: string
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DuesStatusFunction.Arn}/invocations
+              security:
+              - cpwd_api_key: []
+          /v1/payments/confirmations:
+            post:
+              summary: Receive Payment Confirmations from PFMS (Webhook)
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PaymentConfirmationFunction.Arn}/invocations
+              security:
+              - pfms_api_key: []
+        securitySchemes:
+          api_key:
+            type: apiKey
+            name: x-api-key
+            in: header
+          cpwd_api_key:
+            type: apiKey
+            name: x-api-key
+            in: header
+          pfms_api_key:
+            type: apiKey
+            name: x-api-key
+            in: header
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          Quota:
+            Limit: 1000000
+            Period: MONTH
+          Throttle:
+            RateLimit: 1000
+            BurstLimit: 2000
+  AllotteesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: LokSabhaWaterBilling-Allottees-${Environment}
+      AttributeDefinitions:
+      - AttributeName: quarter_id
+        AttributeType: S
+      - AttributeName: employee_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: quarter_id
+        KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      GlobalSecondaryIndexes:
+      - IndexName: employee_id-index
+        Projection:
+          ProjectionType: ALL
+        KeySchema:
+        - AttributeName: employee_id
+          KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+      Tags:
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: ManagedBy
+        Value: SAM
+  WaterBillsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: LokSabhaWaterBilling-WaterBills-${Environment}
+      AttributeDefinitions:
+      - AttributeName: allottee_id
+        AttributeType: S
+      - AttributeName: billing_month
+        AttributeType: S
+      KeySchema:
+      - AttributeName: allottee_id
+        KeyType: HASH
+      - AttributeName: billing_month
+        KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: ManagedBy
+        Value: SAM
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+  PaymentStatusesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: LokSabhaWaterBilling-PaymentStatuses-${Environment}
+      AttributeDefinitions:
+      - AttributeName: employee_id
+        AttributeType: S
+      - AttributeName: billing_month
+        AttributeType: S
+      KeySchema:
+      - AttributeName: employee_id
+        KeyType: HASH
+      - AttributeName: billing_month
+        KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: ManagedBy
+        Value: SAM
+  AllotteeSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: allottee_sync_lambda.lambda_handler
+      CodeUri: AllotteeSyncFunction
+      Policies:
+      - DynamoDBWritePolicy:
+          TableName:
+            Ref: AllotteesTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: AllotteesTable
+      Events:
+        GetAllottees:
+          Type: Api
+          Properties:
+            Path: /v1/allottees
+            Method: get
+            RestApiId:
+              Ref: WaterBillingApi
+            Auth:
+              ApiKeyRequired: true
+        UpdateStatus:
+          Type: Api
+          Properties:
+            Path: /v1/allottees/status-updates
+            Method: post
+            RestApiId:
+              Ref: WaterBillingApi
+            Auth:
+              ApiKeyRequired: true
+    Metadata:
+      SamResourceId: AllotteeSyncFunction
+  DuesStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dues_status_lambda.lambda_handler
+      CodeUri: DuesStatusFunction
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: AllotteesTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: WaterBillsTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: PaymentStatusesTable
+      Events:
+        GetDuesStatus:
+          Type: Api
+          Properties:
+            Path: /v1/allottees/{employee_id}/water-dues-status
+            Method: get
+            RestApiId:
+              Ref: WaterBillingApi
+            Auth:
+              ApiKeyRequired: true
+    Metadata:
+      SamResourceId: DuesStatusFunction
+  SendDeductionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: send_deductions_lambda.lambda_handler
+      CodeUri: SendDeductionsFunction
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: AllotteesTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: WaterBillsTable
+      - Statement:
+          Effect: Allow
+          Action:
+          - ses:SendEmail
+          - ses:SendRawEmail
+          Resource:
+            Fn::Sub: arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SESEmailSender}
+      Events:
+        MonthlySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 2 1 * ? *)
+            Input: '{"message": "Triggering monthly water deduction process and sending
+              to DDO."}'
+    Metadata:
+      SamResourceId: SendDeductionsFunction
+  PaymentConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: payment_confirmation_lambda.lambda_handler
+      CodeUri: PaymentConfirmationFunction
+      Policies:
+      - DynamoDBWritePolicy:
+          TableName:
+            Ref: PaymentStatusesTable
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: WaterBillsTable
+      Events:
+        ConfirmPayment:
+          Type: Api
+          Properties:
+            Path: /v1/payments/confirmations
+            Method: post
+            RestApiId:
+              Ref: WaterBillingApi
+            Auth:
+              ApiKeyRequired: true
+    Metadata:
+      SamResourceId: PaymentConfirmationFunction
+Outputs:
+  WaterBillingApiUrl:
+    Description: API Gateway endpoint URL for the Lok Sabha Water Billing API
+    Value:
+      Fn::Sub: https://${WaterBillingApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+  AllotteesTableName:
+    Description: DynamoDB Table Name for Allottee Data
+    Value:
+      Ref: AllotteesTable
+  WaterBillsTableName:
+    Description: DynamoDB Table Name for Water Bill Records
+    Value:
+      Ref: WaterBillsTable
+  PaymentStatusesTableName:
+    Description: DynamoDB Table Name for Payment Statuses
+    Value:
+      Ref: PaymentStatusesTable

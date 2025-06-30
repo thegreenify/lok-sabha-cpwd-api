@@ -15,10 +15,14 @@
     <option name="recentlyUsedRegions">
       <list>
         <option value="ap-south-1" />
+        <option value="us-east-1" />
       </list>
     </option>
   </component>
+  <component name="connectionManager">
+    <option name="activeConnectionId" value="AwsConnectionManagerConnection" />
+  </component>
   <component name="explorerToolWindow">
-    <option name="selectedTab" value="CodeCatalyst" />
+    <option name="selectedTab" value="Explorer" />
   </component>
 </project>
