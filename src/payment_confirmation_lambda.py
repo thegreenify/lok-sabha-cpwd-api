@@ -31,22 +31,19 @@ def lambda_handler(event):
                 continue
 
             # Update PaymentStatusesTable
+            # from boto3.dynamodb.conditions import Attr  # Import Attr for safe attribute handling
             payment_statuses_table.put_item(
                 Item={
-                    'employee_id': employee_id,
-                    'billing_month': billing_month,
-                    'job_id': job_id, # Optional, for tracking the batch
-                    'amount_deducted_inr': amount_deducted_inr,
-                    'status': status,
-                    'failure_reason': failure_reason,
-                    'confirmed_at': datetime.now().isoformat() + 'Z'
+                    'employee_id': Attr('employee_id').eq(employee_id),
+                    'billing_month': Attr('billing_month').eq(billing_month),
+                    'job_id': Attr('job_id').eq(job_id),
+                    'amount_deducted_inr': Attr('amount_deducted_inr').eq(amount_deducted_inr),
+                    'status': Attr('status').eq(status),
+                    'failure_reason': Attr('failure_reason').eq(failure_reason),
+                    'confirmed_at': Attr('confirmed_at').eq(datetime.now().isoformat() + 'Z')
                 }
             )
 
-            # Optionally, update the status of the corresponding bill in WaterBillsTable
-            # This requires knowing the allottee_id linked to the employee_id and quarter_id
-            # You might need to query the allottees_table here
-            # For simplicity, we'll just log an update idea
             print(f"Confirmed payment for {employee_id} ({billing_month}): {status}")
 
         return {
