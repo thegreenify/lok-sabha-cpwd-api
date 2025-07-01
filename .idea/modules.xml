@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/lok-sabha-api.iml" filepath="$PROJECT_DIR$/lok-sabha-api.iml" />
+      <module fileurl="file://$PROJECT_DIR$/lok-sabha-cpwd-api.iml" filepath="$PROJECT_DIR$/lok-sabha-cpwd-api.iml" />
     </modules>
   </component>
 </project>
